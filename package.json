@@ -9,7 +9,10 @@
     "lint": "next lint",
     "proto:clean": "rm -rf ./src/compiled/*",
     "proto:generate": "./node_modules/grpc-tools/bin/protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt='outputServices=grpc-js,env=node,useOptionals=messages,exportCommonSymbols=false,esModuleInterop=true' --ts_proto_out=./src/compiled --proto_path=./src/proto ./src/proto/*.proto",
-    "proto:build": "npm run proto:clean && npm run proto:generate"
+    "proto:build": "npm run proto:clean && npm run proto:generate",
+    "proto:win:clean": "powershell.exe Remove-Item -Recurse -Force .\\src\\compiled\\*",
+    "proto:win:generate": "powershell.exe .\\node_modules\\grpc-tools\\bin\\protoc --plugin=.\\node_modules\\.bin\\protoc-gen-ts_proto --ts_proto_opt='outputServices=grpc-js,env=node,useOptionals=messages,exportCommonSymbols=false,esModuleInterop=true' --ts_proto_out=.\\src\\compiled --proto_path=.\\src\\proto .\\src\\proto\\*.proto",
+    "proto:win:build": "npm run proto:win:clean && npm run proto:win:generate"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
