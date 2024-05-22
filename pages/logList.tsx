@@ -1,14 +1,11 @@
 import React from 'react';
 import { GetServerSideProps } from 'next';
-import { MaterialReactTable } from 'material-react-table'; // Correct import
-import { LogsMessages_Log, LogsMessages_logLevel } from '../src/compiled/logsCollector'; // Ensure this import is correct
-import { LogsRequest, LogsResponse, LogsServiceClient } from '../src/compiled/logs'; // Ensure this import is correct
-import { ChannelCredentials } from '@grpc/grpc-js';
+import { MaterialReactTable } from 'material-react-table';
 
 interface Log {
   id: string;
-  title: string;
-  project: string;
+  message: string;
+  application: string;
   level: string;
   date: string;
 }
@@ -28,35 +25,28 @@ const LogList: React.FC<LogListProps> = ({ logs }) => {
 
   return (
     <MaterialReactTable
-    columns={columns}
-    data={logs}
-    enableFullScreenToggle={false}
-    initialState={{ isFullScreen: true }}    
-    ></MaterialReactTable>
+      columns={columns}
+      data={logs}
+      enableFullScreenToggle={false}
+      initialState={{ isFullScreen: true }}
+    />
   );
 };
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const client = new LogsServiceClient('127.0.0.1:8888', ChannelCredentials.createInsecure());
-  const request = LogsRequest.create({ page: 1, pageSize: 100, index: "", filters: [] });
+  const { req } = context;
+  const protocol = req.headers['x-forwarded-proto'] || 'http';
+  const host = req.headers['host'];
+  const apiUrl = `${protocol}://${host}/api/logs`;
 
-  return new Promise((resolve, reject) => {
-    client.list(request, (err: any, response: LogsResponse) => {
-      if (err) {
-        console.error('Error fetching data:', err);
-        reject(err);
-      } else {
-        const logs = response.logs.map((log: LogsMessages_Log) => ({
-          id: log.id,
-          message: log.message,
-          application: log.application?.name || '',
-          level: LogsMessages_logLevel[log.level],
-          date: new Date(log.logTime).toLocaleString(),
-        }));
-        resolve({ props: { logs } });
-      }
-    });
-  });
+  const res = await fetch(apiUrl);
+  const data = await res.json();
+
+  return {
+    props: {
+      logs: data.logs,
+    },
+  };
 };
 
 export default LogList;

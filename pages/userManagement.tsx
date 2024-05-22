@@ -12,22 +12,11 @@ import { Box, Button, IconButton, TextField, Toolbar, Typography, Modal } from '
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
-
-import { 
-  NotificationServiceClient, 
-  User, 
-  SetNotificationRequest, 
-  UpdateNotificationRequest, 
-  RemoveNotificationRequest, 
-  ListNotificationsRequest, 
-} from '../src/compiled/notifications';
-import { ChannelCredentials, credentials } from '@grpc/grpc-js';
-
-const client = new NotificationServiceClient('127.0.0.1:8888', ChannelCredentials.createInsecure());
+import { User } from '@/compiled/notifications';
 
 const logTypes = ['fatal', 'info', 'warning', 'debug'];
 
-const Example: React.FC = () => {
+const UserManagement: React.FC = () => {
   const [rowData, setRowData] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -40,29 +29,35 @@ const Example: React.FC = () => {
   });
 
   const fetchData = useCallback(async () => {
-    const request = ListNotificationsRequest.create();
-    client.listNotifications(request, (error, response) => {
-      if (!error && response) {
-        setRowData(response.users);
-      } else {
-        console.error('Error fetching data:', error);
-      }
-    });
+    try {
+      const response = await fetch('/api/notification');
+      const data = await response.json();
+      setRowData(data.users);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
   }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const handleDelete = (id: number) => {
-    const request = RemoveNotificationRequest.create({ userId: id });
-    client.removeNotification(request, (error, response) => {
-      if (!error) {
-        fetchData();
-      } else {
-        console.error('Error deleting user:', error);
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch('/api/notification', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
       }
-    });
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+    }
   };
 
   const handleAddRow = () => {
@@ -83,42 +78,44 @@ const Example: React.FC = () => {
     setOpen(true);
   };
 
-  const handleSaveNewRow = () => {
-    if (isEditMode && editingRowIndex !== null) {
-      const request = UpdateNotificationRequest.create({
-        userId: newRow.id,
-        attentionLevels: newRow.attentionLevels,
-      });
-      client.updateNotification(request, (error, response) => {
-        if (!error) {
-          fetchData();
-        } else {
-          console.error('Error updating user:', error);
+  const handleSaveNewRow = async () => {
+    const url = '/api/notification';
+    const method = isEditMode ? 'PUT' : 'POST';
+
+    const payload = isEditMode
+      ? {
+          userId: newRow.id,
+          attentionLevels: newRow.attentionLevels,
         }
+      : {
+          username: newRow.username,
+          email: newRow.email,
+          attentionLevels: newRow.attentionLevels,
+        };
+
+    // Ensure no invalid numbers in attentionLevels
+    payload.attentionLevels = payload.attentionLevels.filter(level => Number.isInteger(level));
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
-    } else {
-      const request = SetNotificationRequest.create({
-        username: newRow.username,
-        email: newRow.email,
-        attentionLevels: newRow.attentionLevels,
-      });
-      client.setNotification(request, (error, response) => {
-        if (!error) {
-          fetchData();
-        } else {
-          console.error('Error adding user:', error);
-        }
-      });
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+      fetchData();
+      setOpen(false);
+    } catch (error) {
+      console.error('Error saving user:', error);
     }
-    setOpen(false);
   };
 
   const handleClose = () => {
     setOpen(false);
-  };
-
-  const handleSave = () => {
-    console.log('Saved data:', rowData);
   };
 
   const columns = useMemo<MRT_ColumnDef<User>[]>(
@@ -143,36 +140,9 @@ const Example: React.FC = () => {
         header: 'Attention Levels',
         size: 300,
         Cell: ({ cell }) => (
-          <FormGroup row>
-            {logTypes.map((logType, index) => (
-              <FormControlLabel
-                key={logType}
-                control={
-                  <Checkbox
-                    checked={(cell.getValue() as number[]).includes(index)}
-                    onChange={(event) => {
-                      const newData = [...rowData];
-                      const attentionLevels = newData[cell.row.index].attentionLevels;
-                      const logTypeIndex = index;
-                      if (event.target.checked) {
-                        if (!attentionLevels.includes(logTypeIndex)) {
-                          attentionLevels.push(logTypeIndex);
-                        }
-                      } else {
-                        const logTypePos = attentionLevels.indexOf(logTypeIndex);
-                        if (logTypePos !== -1) {
-                          attentionLevels.splice(logTypePos, 1);
-                        }
-                      }
-                      newData[cell.row.index].attentionLevels = attentionLevels;
-                      setRowData(newData);
-                    }}
-                  />
-                }
-                label={logType}
-              />
-            ))}
-          </FormGroup>
+          <div>
+            {(cell.getValue() as number[]).map((index) => logTypes[index]).join(', ')}
+          </div>
         ),
       },
       {
@@ -223,9 +193,6 @@ const Example: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2, gap: 2 }}>
         <Button variant="contained" color="success" onClick={handleAddRow}>
           Add
-        </Button>
-        <Button variant="contained" color="inherit" onClick={handleSave} sx={{ mr: 2 }}>
-          Save
         </Button>
       </Box>
       <Modal
@@ -280,15 +247,14 @@ const Example: React.FC = () => {
                     checked={newRow.attentionLevels.includes(index)}
                     onChange={(event) => {
                       const updatedAttentionLevels = [...newRow.attentionLevels];
-                      const logTypeIndex = index;
                       if (event.target.checked) {
-                        if (!updatedAttentionLevels.includes(logTypeIndex)) {
-                          updatedAttentionLevels.push(logTypeIndex);
+                        if (!updatedAttentionLevels.includes(index)) {
+                          updatedAttentionLevels.push(index);
                         }
                       } else {
-                        const logTypePos = updatedAttentionLevels.indexOf(logTypeIndex);
-                        if (logTypePos !== -1) {
-                          updatedAttentionLevels.splice(logTypePos, 1);
+                        const indexPos = updatedAttentionLevels.indexOf(index);
+                        if (indexPos !== -1) {
+                          updatedAttentionLevels.splice(indexPos, 1);
                         }
                       }
                       setNewRow({
@@ -312,4 +278,4 @@ const Example: React.FC = () => {
   );
 };
 
-export default Example;
+export default UserManagement;
